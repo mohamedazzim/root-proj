@@ -1,0 +1,125 @@
+You are tasked with developing a SaaS web application to automate the extraction, storage, and intelligent search/filtering of daily Madras High Court cause lists, focusing on HRCE and temple cases, with complete end-to-end features.
+
+Requirements:
+
+1. Data Extraction
+Fetch daily cause list from:
+
+https://mhc.tn.gov.in/judis/clists/clists-madras/index.php
+
+Scrape and parse both HTML and PDF formats as published.
+
+Extract for each cause entry:
+
+Court number
+
+Case number
+
+Party names (petitioner/respondent)
+
+Advocate name
+
+Hearing date and time
+
+Case-type/category
+
+Schedule extraction daily; allow weekly summary extraction for HRCE and temple-related cases.
+
+2. Database Storage
+Use relational DB (Postgres/MySQL).
+
+Table required:
+
+text
+id (PK)
+court_no
+case_no
+petitioner
+respondent
+advocate
+hearing_date
+hearing_time
+case_type
+raw_text
+inserted_at
+Store incomplete rows with NULLs allowed.
+
+3. Search & Filtering
+Web search with:
+
+Exact & fuzzy match (typo tolerance) for case number, party names, advocate names.
+
+Filter by hearing date, court number.
+
+Highlight HRCE cases and temple-related entities.
+
+4. Related Case Identification
+Auto-identify cases with similar party names, advocate, temple/entity using Levenshtein/cosine similarity.
+
+Suggest and link cases with probable relation.
+
+5. User Management
+Roles:
+
+Legal professional/researcher
+
+Court admin
+
+Superadmin
+
+Access control for features and data export.
+
+6. Admin Interface
+Scraper health/status, manual run trigger.
+
+Dashboard with error logs and anomaly reporting.
+
+Data review and manual correction tools.
+
+7. API Access (optional, premium)
+REST endpoints for external programmatic case search and data retrieval.
+
+8. Security & Compliance
+Data encryption at rest/transit.
+
+Role-based access, audit logs.
+
+9. Frontend
+Next.js/React.js app.
+
+Homepage: Search bar, filter, results table.
+
+Case details page with all metadata, related cases, and download link.
+
+Admin dashboard for management.
+
+10. Backend
+Python (FastAPI/Flask/Django)
+
+Scraper pipeline (BeautifulSoup, pdfplumber, requests)
+
+Fuzzy logic (RapidFuzz/ElasticSearch optional)
+
+API endpoints
+
+11. Quality & Monitoring
+Automated error notifications.
+
+Extraction accuracy: >95%
+
+Uptime: >99.9%, latency <1s for typical searches.
+
+12. Deployment
+Cloud-ready (Docker for AWS/Render/Azure/GCP)
+
+Deliver:
+
+Full codebase (frontend, backend, scraper, DB migration)
+
+Deployment-ready Docker scripts
+
+Documentation: Install, configure, API usage
+
+Test suite: End-to-end, unit, scraper coverage
+
+Sample data and demo link
