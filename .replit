@@ -1,4 +1,4 @@
-modules = ["nodejs-20", "python-3.12", "web"]
+modules = ["nodejs-20", "python-3.12", "web", "postgresql-16"]
 [agent]
 expertMode = true
 
@@ -51,13 +51,13 @@ localPort = 8000
 externalPort = 8000
 
 [[ports]]
-localPort = 33265
-externalPort = 3001
-
-[[ports]]
 localPort = 42237
 externalPort = 3000
 
+[[ports]]
+localPort = 43753
+externalPort = 3001
+
 [nix]
 channel = "stable-25_05"
-packages = ["libxcrypt", "rapidfuzz-cpp", "taskflow"]
+packages = ["libxcrypt", "rapidfuzz-cpp", "taskflow", "xcodebuild", "zlib"]
