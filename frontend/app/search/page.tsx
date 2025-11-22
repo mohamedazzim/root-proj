@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Navbar from '@/components/Navbar'
 
 interface Cause {
@@ -29,6 +29,31 @@ export default function SearchPage() {
   const [results, setResults] = useState<Cause[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  // Load all cases when the component mounts
+  useEffect(() => {
+    loadAllCases()
+  }, [])
+
+  const loadAllCases = async () => {
+    setLoading(true)
+    setError('')
+    
+    try {
+      const response = await fetch('/api/proxy/api/cases/search?limit=50')
+      
+      if (!response.ok) {
+        throw new Error('Failed to load cases')
+      }
+      
+      const data = await response.json()
+      setResults(data)
+    } catch (err: any) {
+      setError(err.message || 'Failed to load cases')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleSearch = async () => {
     setLoading(true)
