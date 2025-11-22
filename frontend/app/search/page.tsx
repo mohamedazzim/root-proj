@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Navbar from '@/components/Navbar'
 
 interface Cause {
@@ -27,15 +27,10 @@ export default function SearchPage() {
   const [fuzzy, setFuzzy] = useState(false)
   const [hrceOnly, setHrceOnly] = useState(false)
   const [results, setResults] = useState<Cause[]>([])
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  // Load all cases when the component mounts
-  useEffect(() => {
-    loadAllCases()
-  }, [])
-
-  const loadAllCases = async () => {
+  const loadAllCases = useCallback(async () => {
     setLoading(true)
     setError('')
     
@@ -53,7 +48,12 @@ export default function SearchPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
+
+  // Load all cases when the component mounts
+  useEffect(() => {
+    loadAllCases()
+  }, [loadAllCases])
 
   const handleSearch = async () => {
     setLoading(true)
