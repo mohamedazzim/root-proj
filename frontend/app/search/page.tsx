@@ -28,7 +28,7 @@ export default function SearchPage() {
   const [fuzzy, setFuzzy] = useState(false)
   const [hrceOnly, setHrceOnly] = useState(false)
   const [results, setResults] = useState<Cause[]>([])
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
   useEffect(() => {

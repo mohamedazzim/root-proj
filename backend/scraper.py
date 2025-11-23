@@ -342,3 +342,4 @@ def scrape_cause_list(db: Session, target_date: date = None) -> int:
 
 def run_scraper(db: Session, target_date: date = None) -> int:
     return scrape_cause_list(db, target_date)
+

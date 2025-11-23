@@ -26,7 +26,6 @@ def trigger_scraper(
     check_admin_or_superadmin(current_user)
     
     print(f"Triggering scraper with target_date: {target_date}")
-    print(f"DEBUG: Received trigger request. target_date type: {type(target_date)}, value: {target_date}")
     
     try:
         records_count = run_scraper(db, target_date)
@@ -75,9 +74,9 @@ async def get_scraper_status(
     total_causes = db.query(Cause).count()
     
     return {
-        "status": latest_log.status,
+        "status": str(latest_log.status.value) if hasattr(latest_log.status, 'value') else str(latest_log.status),
         "last_run": latest_log.created_at,
-        "last_status": latest_log.status,
+        "last_status": str(latest_log.status.value) if hasattr(latest_log.status, 'value') else str(latest_log.status),
         "total_records": total_causes,
         "last_extraction_count": latest_log.records_extracted
     }
