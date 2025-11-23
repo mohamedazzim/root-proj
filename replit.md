@@ -116,6 +116,15 @@ This application automates the daily extraction of cause lists from the Madras H
 - All sensitive data stored as environment secrets (SESSION_SECRET, DATABASE_URL, etc.)
 
 ## Recent Changes
+- 2025-11-23: **SCRAPER ROBUSTNESS IMPROVEMENTS**
+  - Enhanced scraper with exponential backoff retry logic (5 attempts)
+  - Added multiple PDF filename variant support for resilience
+  - Improved error handling distinguishing timeouts, connection errors, and HTTP errors
+  - Fixed all LSP type annotation errors in database.py, auth.py, and scraper.py
+  - Added sample data script (`backend/add_sample_data.py`) with 10 realistic test cases
+  - Database now contains sample HRCE and general cases for testing
+  - All features testable even when court website is unavailable
+
 - 2025-11-22: **PROJECT COMPLETION**
   - Fixed RBAC security vulnerability with separate response schemas
   - Fixed TypeScript headers issues in frontend (RequestInit typing)
