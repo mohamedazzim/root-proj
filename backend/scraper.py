@@ -311,16 +311,22 @@ def scrape_cause_list(db: Session, target_date: date | None = None) -> int:
                 
             add_log(f"Processing date: {date_str}")
             pdf_path = download_pdf(date_str)
+            hearing_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+            
             if not pdf_path:
-                add_log(f"Skipping {date_str} - PDF download failed")
+                # Check if we already have data for this date
+                existing_count = db.query(Cause).filter(Cause.hearing_date == hearing_date).count()
+                if existing_count > 0:
+                    add_log(f"PDF download failed. Using {existing_count} cached records for {date_str}")
+                    total_extracted += existing_count
+                else:
+                    add_log(f"Skipping {date_str} - PDF download failed and no cached data available")
                 continue
                 
             try:
-                hearing_date = datetime.strptime(date_str, "%Y-%m-%d").date()
-                
                 add_log(f"Parsing PDF for {date_str}...")
                 
-                # Delete existing records for this date to avoid duplicates
+                # Delete existing records for this date to avoid duplicates (only after successful download)
                 db.query(Cause).filter(Cause.hearing_date == hearing_date).delete()
                 db.commit()
                 
