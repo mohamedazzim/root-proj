@@ -133,10 +133,10 @@ def parse_pdf_content(pdf_path, hearing_date):
     # Regex patterns
     court_pattern = re.compile(r"COURT\s+NO\.\s+(\d+\s*[a-zA-Z]?)")
     # Main case pattern: SrNo CaseNo Rest
-    main_case_pattern = re.compile(r"^(\d+)\s+([A-Z]+(?:/[A-Za-z0-9]+)?/\d+/\d+)\s+(.*)")
+    main_case_pattern = re.compile(r"^(\d+)\s+([A-Z]+(?:[/ ][A-Za-z0-9]+)?[/ ]\d+/\d+)\s+(.*)")
     # Connected case pattern: (AND)? CaseNo Rest
     # Matches lines starting with AND or just whitespace, then a case number
-    connected_case_pattern = re.compile(r"^\s*(?:AND)?\s*([A-Z]+(?:/[A-Za-z0-9]+)?/\d+/\d+)\s+(.*)")
+    connected_case_pattern = re.compile(r"^\s*(?:AND)?\s*([A-Z]+(?:[/ ][A-Za-z0-9]+)?[/ ]\d+/\d+)\s+(.*)")
     # Pattern for just "AND" on a line, implying next line has case info
     and_only_pattern = re.compile(r"^\s*AND\s*$")
     
@@ -188,7 +188,7 @@ def parse_pdf_content(pdf_path, hearing_date):
                             # Try to match case pattern on next line
                             # It might not have "AND" prefix since "AND" was on previous line
                             # But we can reuse connected_case_pattern or just look for case no
-                            next_match = re.match(r"^\s*([A-Z]+(?:/[A-Za-z0-9]+)?/\d+/\d+)\s+(.*)", next_line)
+                            next_match = re.match(r"^\s*([A-Z]+(?:[/ ][A-Za-z0-9]+)?[/ ]\d+/\d+)\s+(.*)", next_line)
                             if next_match:
                                 case_no = next_match.group(1)
                                 rest_of_line = next_match.group(2)
