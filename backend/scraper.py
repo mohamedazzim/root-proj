@@ -67,11 +67,11 @@ def detect_hrce_case(text: str) -> bool:
     return any(keyword.upper() in text_upper for keyword in HRCE_KEYWORDS)
 
 def fetch_available_dates():
-    max_retries = 3
+    max_retries = 2
     for attempt in range(max_retries):
         try:
             add_log(f"Fetching dates (attempt {attempt + 1}/{max_retries})...")
-            response = requests.get(DATE_API_URL, verify=False, timeout=90)
+            response = requests.get(DATE_API_URL, verify=False, timeout=30)
             response.raise_for_status()
             data = response.json()
             # data is list of dicts: [{"doc":"2025-11-24"}, ...]
@@ -79,83 +79,51 @@ def fetch_available_dates():
             add_log(f"Successfully fetched {len(dates)} dates")
             return dates
         except requests.exceptions.Timeout:
-            add_log(f"Timeout on attempt {attempt + 1}. Retrying in {2 ** attempt} seconds...")
-            if attempt < max_retries - 1:
-                time.sleep(2 ** attempt)
+            add_log(f"Timeout on attempt {attempt + 1}. Giving up.")
+            return []
         except Exception as e:
-            add_log(f"Error fetching dates (attempt {attempt + 1}): {e}")
-            if attempt < max_retries - 1:
-                time.sleep(2 ** attempt)
+            add_log(f"Error fetching dates: {str(e)[:100]}")
+            return []
     
-    add_log("Failed to fetch dates after all retries")
     return []
 
 def download_pdf(date_str):
     # date_str is YYYY-MM-DD
     # PDF filename format: cause_DDMMYYYY.pdf
-    # Try multiple filename variants in case of different naming conventions
-    max_retries = 5
     dt = datetime.strptime(date_str, "%Y-%m-%d")
+    filename = f"cause_{dt.strftime('%d%m%Y')}.pdf"
+    url = f"{PDF_BASE_URL}/{filename}"
     
-    # Try different filename formats
-    filename_variants = [
-        f"cause_{dt.strftime('%d%m%Y')}.pdf",
-        f"Cause_{dt.strftime('%d%m%Y')}.pdf",
-        f"causelist_{dt.strftime('%d%m%Y')}.pdf",
-        f"cause_{dt.strftime('%Y%m%d')}.pdf"
-    ]
+    max_retries = 2
     
-    last_error = None
-    last_status_code = None
-    
-    for filename in filename_variants:
-        url = f"{PDF_BASE_URL}/{filename}"
-        
-        for attempt in range(max_retries):
-            try:
-                add_log(f"Trying: {filename} (attempt {attempt + 1}/{max_retries})...")
+    for attempt in range(max_retries):
+        try:
+            add_log(f"Downloading {filename} (attempt {attempt + 1}/{max_retries})...")
+            
+            response = requests.get(url, verify=False, timeout=30, stream=True)
+            if response.status_code == 200:
+                fd, path = tempfile.mkstemp(suffix=".pdf")
+                with os.fdopen(fd, 'wb') as tmp:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        tmp.write(chunk)
                 
-                response = requests.get(url, verify=False, timeout=120, stream=True)
-                if response.status_code == 200:
-                    fd, path = tempfile.mkstemp(suffix=".pdf")
-                    with os.fdopen(fd, 'wb') as tmp:
-                        for chunk in response.iter_content(chunk_size=8192):
-                            tmp.write(chunk)
-                    
-                    file_size = os.path.getsize(path)
-                    add_log(f"PDF downloaded successfully: {filename} ({file_size} bytes)")
-                    return path
-                else:
-                    last_status_code = response.status_code
-                    add_log(f"HTTP {response.status_code} for {filename}")
-                    if response.status_code == 404:
-                        break
-                    if attempt < max_retries - 1:
-                        time.sleep(2 ** attempt)
-            except requests.exceptions.Timeout as e:
-                last_error = f"Timeout: {str(e)}"
-                add_log(f"Download timeout (attempt {attempt + 1}). Retrying...")
-                if attempt < max_retries - 1:
-                    time.sleep(2 ** attempt)
-            except requests.exceptions.ConnectionError as e:
-                last_error = f"Connection error: {str(e)}"
-                add_log(f"Connection error (attempt {attempt + 1}): {str(e)[:100]}")
-                if attempt < max_retries - 1:
-                    time.sleep(2 ** attempt)
-            except Exception as e:
-                last_error = f"Error: {str(e)}"
-                add_log(f"Unexpected error (attempt {attempt + 1}): {str(e)[:100]}")
-                if attempt < max_retries - 1:
-                    time.sleep(2 ** attempt)
+                file_size = os.path.getsize(path)
+                add_log(f"Downloaded successfully ({file_size} bytes)")
+                return path
+            else:
+                add_log(f"HTTP error: {response.status_code}. Giving up.")
+                return None
+        except requests.exceptions.Timeout:
+            add_log(f"Download timeout on attempt {attempt + 1}. Giving up.")
+            return None
+        except requests.exceptions.ConnectionError as e:
+            add_log(f"Connection error: {str(e)[:80]}")
+            return None
+        except Exception as e:
+            add_log(f"Error downloading PDF: {str(e)[:100]}")
+            return None
     
-    # Log detailed failure information
-    if last_status_code:
-        add_log(f"All filename variants failed. Last HTTP status: {last_status_code}")
-    elif last_error:
-        add_log(f"Network/connection issue: {last_error}")
-    else:
-        add_log(f"Failed to download PDF for {date_str} - unknown error")
-    
+    add_log(f"Failed to download {filename}")
     return None
 
 def parse_pdf_content(pdf_path, hearing_date):
