@@ -1,10 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Navbar from '@/components/Navbar'
 
 interface Cause {
   id: number
+  sr_no: string | null
   court_no: string | null
   case_no: string | null
   petitioner: string | null
@@ -29,6 +30,10 @@ export default function SearchPage() {
   const [results, setResults] = useState<Cause[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    handleSearch()
+  }, [])
 
   const handleSearch = async () => {
     setLoading(true)
@@ -61,6 +66,39 @@ export default function SearchPage() {
       setError(err.message || 'Failed to search')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleDownloadPDF = async () => {
+    const params = new URLSearchParams()
+    if (query) params.append('query', query)
+    if (caseNo) params.append('case_no', caseNo)
+    if (advocate) params.append('advocate', advocate)
+    if (courtNo) params.append('court_no', courtNo)
+    if (dateFrom) params.append('hearing_date_from', dateFrom)
+    if (dateTo) params.append('hearing_date_to', dateTo)
+    if (hrceOnly) params.append('is_hrce', 'true')
+    
+    try {
+      const token = localStorage.getItem('token')
+      const fetchInit: RequestInit = {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      }
+      const response = await fetch(`/api/proxy/api/cases/download-pdf?${params}`, fetchInit)
+      
+      if (!response.ok) throw new Error('Download failed')
+      
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'cause_list_results.pdf'
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error(err)
+      setError('Failed to download PDF')
     }
   }
 
@@ -201,22 +239,42 @@ export default function SearchPage() {
             </label>
           </div>
           
-          <button
-            onClick={handleSearch}
-            disabled={loading}
-            style={{
-              background: '#1976d2',
-              color: 'white',
-              padding: '0.75rem 2rem',
-              border: 'none',
-              borderRadius: '4px',
-              fontSize: '1rem',
-              cursor: loading ? 'not-allowed' : 'pointer',
-              opacity: loading ? 0.6 : 1
-            }}
-          >
-            {loading ? 'Searching...' : 'Search'}
-          </button>
+          <div style={{ display: 'flex', gap: '1rem' }}>
+            <button
+              onClick={handleSearch}
+              disabled={loading}
+              style={{
+                background: '#1976d2',
+                color: 'white',
+                padding: '0.75rem 2rem',
+                border: 'none',
+                borderRadius: '4px',
+                fontSize: '1rem',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                fontWeight: 'bold'
+              }}
+            >
+              {loading ? 'Searching...' : 'Search'}
+            </button>
+            
+            <button
+              onClick={handleDownloadPDF}
+              disabled={loading}
+              style={{
+                background: '#2e7d32',
+                color: 'white',
+                padding: '0.75rem 2rem',
+                border: 'none',
+                borderRadius: '4px',
+                fontSize: '1rem',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                fontWeight: 'bold'
+              }}
+            >
+              Download PDF
+            </button>
+          </div>
+
         </div>
         
         {error && (
@@ -236,6 +294,7 @@ export default function SearchPage() {
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ background: '#f5f5f5', borderBottom: '2px solid #ddd' }}>
+                  <th style={{ padding: '1rem', textAlign: 'left' }}>Sr. No.</th>
                   <th style={{ padding: '1rem', textAlign: 'left' }}>Case No.</th>
                   <th style={{ padding: '1rem', textAlign: 'left' }}>Court</th>
                   <th style={{ padding: '1rem', textAlign: 'left' }}>Petitioner</th>
@@ -254,6 +313,7 @@ export default function SearchPage() {
                       background: cause.is_hrce ? '#fff8e1' : 'white'
                     }}
                   >
+                    <td style={{ padding: '1rem' }}>{cause.sr_no || 'N/A'}</td>
                     <td style={{ padding: '1rem' }}>
                       <a href={`/cases/${cause.id}`} style={{ color: '#1976d2', textDecoration: 'none' }}>
                         {cause.case_no || 'N/A'}

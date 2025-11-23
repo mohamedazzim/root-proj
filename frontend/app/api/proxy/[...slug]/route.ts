@@ -33,9 +33,10 @@ export async function POST(
   { params }: { params: { slug: string[] } }
 ) {
   const pathname = '/' + (params.slug?.join('/') || '')
+  const searchParams = request.nextUrl.search
   
   try {
-    const backendUrl = `http://localhost:8000${pathname}`
+    const backendUrl = `http://localhost:8000${pathname}${searchParams}`
     const headers = new Headers()
     
     const authHeader = request.headers.get('authorization')

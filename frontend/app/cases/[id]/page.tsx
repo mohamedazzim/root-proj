@@ -6,6 +6,7 @@ import Navbar from '@/components/Navbar'
 
 interface Cause {
   id: number
+  sr_no: string | null
   court_no: string | null
   case_no: string | null
   petitioner: string | null
@@ -110,6 +111,9 @@ export default function CaseDetailsPage() {
           marginBottom: '2rem'
         }}>
           <div style={{ display: 'grid', gridTemplateColumns: '200px 1fr', gap: '1rem' }}>
+            <div style={{ fontWeight: 'bold' }}>Sr. No.:</div>
+            <div>{cause.sr_no || 'N/A'}</div>
+
             <div style={{ fontWeight: 'bold' }}>Case Number:</div>
             <div>{cause.case_no || 'N/A'}</div>
             

@@ -7,7 +7,7 @@ from database import get_db
 from models import User, UserRole, ScraperLog, Cause
 from schemas import ScraperLogResponse, ScraperTriggerResponse
 from routers.auth import get_current_user
-from scraper import run_scraper
+from scraper import run_scraper, stop_scraper, get_scraper_progress
 
 router = APIRouter()
 
@@ -18,14 +18,18 @@ def check_admin_or_superadmin(current_user: User):
 
 
 @router.post("/trigger", response_model=ScraperTriggerResponse)
-async def trigger_scraper(
+def trigger_scraper(
+    target_date: date = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     check_admin_or_superadmin(current_user)
     
+    print(f"Triggering scraper with target_date: {target_date}")
+    print(f"DEBUG: Received trigger request. target_date type: {type(target_date)}, value: {target_date}")
+    
     try:
-        records_count = run_scraper(db)
+        records_count = run_scraper(db, target_date)
         return ScraperTriggerResponse(
             message="Scraper completed successfully",
             status="success",
@@ -72,8 +76,25 @@ async def get_scraper_status(
     
     return {
         "status": latest_log.status,
-        "last_run": latest_log.run_date,
+        "last_run": latest_log.created_at,
         "last_status": latest_log.status,
         "total_records": total_causes,
         "last_extraction_count": latest_log.records_extracted
     }
+
+
+@router.post("/stop")
+async def stop_scraper_endpoint(
+    current_user: User = Depends(get_current_user)
+):
+    check_admin_or_superadmin(current_user)
+    stop_scraper()
+    return {"message": "Scraper stop requested"}
+
+
+@router.get("/progress")
+async def get_progress(
+    current_user: User = Depends(get_current_user)
+):
+    check_admin_or_superadmin(current_user)
+    return get_scraper_progress()

@@ -47,6 +47,7 @@ class TokenData(BaseModel):
 
 
 class CauseBase(BaseModel):
+    sr_no: Optional[str] = None
     court_no: Optional[str] = None
     case_no: Optional[str] = None
     petitioner: Optional[str] = None

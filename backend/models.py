@@ -32,6 +32,7 @@ class Cause(Base):
     __tablename__ = "causes"
 
     id = Column(Integer, primary_key=True, index=True)
+    sr_no = Column(String(50), index=True)
     court_no = Column(String(50), index=True)
     case_no = Column(String(100), index=True)
     petitioner = Column(Text)

@@ -25,8 +25,51 @@ export default function AdminPage() {
   const [status, setStatus] = useState<ScraperStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [triggering, setTriggering] = useState(false)
+  const [targetDate, setTargetDate] = useState('')
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
+  const [liveLogs, setLiveLogs] = useState<string[]>([])
+
+  const stopScraper = async () => {
+    try {
+      const token = localStorage.getItem('token')
+      await fetch(`/api/proxy/api/scraper/stop`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      setMessage('Stop requested...')
+    } catch (err) {
+      console.error('Failed to stop scraper', err)
+    }
+  }
+
+  useEffect(() => {
+    let intervalId: NodeJS.Timeout
+
+    if (triggering) {
+      setLiveLogs([])
+      intervalId = setInterval(async () => {
+        try {
+          const token = localStorage.getItem('token')
+          const res = await fetch(`/api/proxy/api/scraper/progress`, {
+             headers: { 'Authorization': `Bearer ${token}` }
+          })
+          if (res.ok) {
+            const data = await res.json()
+            if (data.logs) {
+                setLiveLogs(data.logs)
+            }
+          }
+        } catch (e) {
+          console.error("Polling error", e)
+        }
+      }, 2000)
+    }
+
+    return () => {
+      if (intervalId) clearInterval(intervalId)
+    }
+  }, [triggering])
 
   const fetchData = async () => {
     try {
@@ -67,7 +110,12 @@ export default function AdminPage() {
     
     try {
       const token = localStorage.getItem('token')
-      const response = await fetch(`/api/proxy/api/scraper/trigger`, {
+      let url = `/api/proxy/api/scraper/trigger`
+      if (targetDate) {
+        url += `?target_date=${targetDate}`
+      }
+      
+      const response = await fetch(url, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
       })
@@ -134,6 +182,58 @@ export default function AdminPage() {
             }}>
               <h2 style={{ fontSize: '1.5rem', marginBottom: '1.5rem' }}>Scraper Status</h2>
               
+              <div style={{ marginBottom: '1.5rem', display: 'flex', gap: '1rem', alignItems: 'flex-end' }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+                    Select Date to Scrape (Optional)
+                  </label>
+                  <input
+                    type="date"
+                    value={targetDate}
+                    onChange={(e) => setTargetDate(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '0.75rem',
+                      border: '1px solid #ddd',
+                      borderRadius: '4px'
+                    }}
+                  />
+                </div>
+                <button
+                  onClick={triggerScraper}
+                  disabled={triggering}
+                  style={{
+                    background: triggering ? '#ccc' : '#2196f3',
+                    color: 'white',
+                    border: 'none',
+                    padding: '0.75rem 1.5rem',
+                    borderRadius: '4px',
+                    cursor: triggering ? 'not-allowed' : 'pointer',
+                    fontWeight: 'bold',
+                    height: '46px'
+                  }}
+                >
+                  {triggering ? 'Running Scraper...' : 'Run Scraper Now'}
+                </button>
+                {triggering && (
+                  <button
+                    onClick={stopScraper}
+                    style={{
+                      background: '#d32f2f',
+                      color: 'white',
+                      border: 'none',
+                      padding: '0.75rem 1.5rem',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      fontWeight: 'bold',
+                      height: '46px'
+                    }}
+                  >
+                    Stop
+                  </button>
+                )}
+              </div>
+              
               {status && (
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
                   <div>
@@ -162,6 +262,15 @@ export default function AdminPage() {
                     <div style={{ fontSize: '1.25rem', fontWeight: 'bold' }}>
                       {status.last_extraction_count}
                     </div>
+                  </div>
+                </div>
+              )}
+
+              {triggering && (
+                <div style={{ marginBottom: '1.5rem', background: '#f5f5f5', padding: '1rem', borderRadius: '4px', maxHeight: '300px', overflowY: 'auto' }}>
+                  <h3 style={{ fontSize: '1.1rem', marginBottom: '0.5rem' }}>Live Logs</h3>
+                  <div style={{ fontFamily: 'monospace', fontSize: '0.9rem', whiteSpace: 'pre-wrap' }}>
+                    {liveLogs.length > 0 ? liveLogs.join('\n') : 'Waiting for logs...'}
                   </div>
                 </div>
               )}
