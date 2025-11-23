@@ -40,8 +40,7 @@ async def search_causes(
     fuzzy: bool = False,
     limit: int = 1000,
     offset: int = 0,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     query_obj = db.query(Cause)
     

@@ -18,10 +18,14 @@ def seed_database():
         existing_user = db.query(User).filter(User.username == "admin").first()
         if not existing_user:
             print("Creating admin user...")
+            # Ensure password is properly encoded as bytes for bcrypt
+            password = "admin"
+            if isinstance(password, str):
+                password = password.encode('utf-8')
             admin_user = User(
                 username="admin",
                 email="admin@mhc.gov.in",
-                hashed_password=get_password_hash("admin"),
+                hashed_password=get_password_hash(password.decode('utf-8') if isinstance(password, bytes) else password),
                 role=UserRole.SUPERADMIN
             )
             db.add(admin_user)
