@@ -7,6 +7,7 @@ import re
 import pdfplumber
 import os
 import tempfile
+import time
 
 from models import Cause, ScraperLog, ScraperStatus
 
@@ -66,36 +67,96 @@ def detect_hrce_case(text: str) -> bool:
     return any(keyword.upper() in text_upper for keyword in HRCE_KEYWORDS)
 
 def fetch_available_dates():
-    try:
-        response = requests.get(DATE_API_URL, verify=False, timeout=30)
-        response.raise_for_status()
-        data = response.json()
-        # data is list of dicts: [{"doc":"2025-11-24"}, ...]
-        return [item['doc'] for item in data]
-    except Exception as e:
-        print(f"Error fetching dates: {e}")
-        return []
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            add_log(f"Fetching dates (attempt {attempt + 1}/{max_retries})...")
+            response = requests.get(DATE_API_URL, verify=False, timeout=90)
+            response.raise_for_status()
+            data = response.json()
+            # data is list of dicts: [{"doc":"2025-11-24"}, ...]
+            dates = [item['doc'] for item in data]
+            add_log(f"Successfully fetched {len(dates)} dates")
+            return dates
+        except requests.exceptions.Timeout:
+            add_log(f"Timeout on attempt {attempt + 1}. Retrying in {2 ** attempt} seconds...")
+            if attempt < max_retries - 1:
+                time.sleep(2 ** attempt)
+        except Exception as e:
+            add_log(f"Error fetching dates (attempt {attempt + 1}): {e}")
+            if attempt < max_retries - 1:
+                time.sleep(2 ** attempt)
+    
+    add_log("Failed to fetch dates after all retries")
+    return []
 
 def download_pdf(date_str):
     # date_str is YYYY-MM-DD
     # PDF filename format: cause_DDMMYYYY.pdf
-    try:
-        dt = datetime.strptime(date_str, "%Y-%m-%d")
-        filename = f"cause_{dt.strftime('%d%m%Y')}.pdf"
+    # Try multiple filename variants in case of different naming conventions
+    max_retries = 5
+    dt = datetime.strptime(date_str, "%Y-%m-%d")
+    
+    # Try different filename formats
+    filename_variants = [
+        f"cause_{dt.strftime('%d%m%Y')}.pdf",
+        f"Cause_{dt.strftime('%d%m%Y')}.pdf",
+        f"causelist_{dt.strftime('%d%m%Y')}.pdf",
+        f"cause_{dt.strftime('%Y%m%d')}.pdf"
+    ]
+    
+    last_error = None
+    last_status_code = None
+    
+    for filename in filename_variants:
         url = f"{PDF_BASE_URL}/{filename}"
         
-        response = requests.get(url, verify=False, timeout=60)
-        if response.status_code == 200:
-            fd, path = tempfile.mkstemp(suffix=".pdf")
-            with os.fdopen(fd, 'wb') as tmp:
-                tmp.write(response.content)
-            return path
-        else:
-            print(f"Failed to download PDF for {date_str}: {response.status_code}")
-            return None
-    except Exception as e:
-        print(f"Error downloading PDF: {e}")
-        return None
+        for attempt in range(max_retries):
+            try:
+                add_log(f"Trying: {filename} (attempt {attempt + 1}/{max_retries})...")
+                
+                response = requests.get(url, verify=False, timeout=120, stream=True)
+                if response.status_code == 200:
+                    fd, path = tempfile.mkstemp(suffix=".pdf")
+                    with os.fdopen(fd, 'wb') as tmp:
+                        for chunk in response.iter_content(chunk_size=8192):
+                            tmp.write(chunk)
+                    
+                    file_size = os.path.getsize(path)
+                    add_log(f"PDF downloaded successfully: {filename} ({file_size} bytes)")
+                    return path
+                else:
+                    last_status_code = response.status_code
+                    add_log(f"HTTP {response.status_code} for {filename}")
+                    if response.status_code == 404:
+                        break
+                    if attempt < max_retries - 1:
+                        time.sleep(2 ** attempt)
+            except requests.exceptions.Timeout as e:
+                last_error = f"Timeout: {str(e)}"
+                add_log(f"Download timeout (attempt {attempt + 1}). Retrying...")
+                if attempt < max_retries - 1:
+                    time.sleep(2 ** attempt)
+            except requests.exceptions.ConnectionError as e:
+                last_error = f"Connection error: {str(e)}"
+                add_log(f"Connection error (attempt {attempt + 1}): {str(e)[:100]}")
+                if attempt < max_retries - 1:
+                    time.sleep(2 ** attempt)
+            except Exception as e:
+                last_error = f"Error: {str(e)}"
+                add_log(f"Unexpected error (attempt {attempt + 1}): {str(e)[:100]}")
+                if attempt < max_retries - 1:
+                    time.sleep(2 ** attempt)
+    
+    # Log detailed failure information
+    if last_status_code:
+        add_log(f"All filename variants failed. Last HTTP status: {last_status_code}")
+    elif last_error:
+        add_log(f"Network/connection issue: {last_error}")
+    else:
+        add_log(f"Failed to download PDF for {date_str} - unknown error")
+    
+    return None
 
 def parse_pdf_content(pdf_path, hearing_date):
     causes = []
@@ -144,11 +205,11 @@ def parse_pdf_content(pdf_path, hearing_date):
                     is_connected = bool(connected_match) and not is_main
                     is_and_only = bool(and_only_match)
                     
-                    if is_main:
+                    if is_main and main_match:
                         current_sr_no = main_match.group(1)
                         case_no = main_match.group(2)
                         rest_of_line = main_match.group(3)
-                    elif is_connected and current_sr_no:
+                    elif is_connected and current_sr_no and connected_match:
                         # It's a connected case under the current Sr No
                         case_no = connected_match.group(1)
                         rest_of_line = connected_match.group(2)
@@ -258,7 +319,7 @@ def parse_pdf_content(pdf_path, hearing_date):
         
     return causes
 
-def scrape_cause_list(db: Session, target_date: date = None) -> int:
+def scrape_cause_list(db: Session, target_date: date | None = None) -> int:
     SCRAPER_STATE["is_running"] = True
     SCRAPER_STATE["stop_requested"] = False
     SCRAPER_STATE["logs"] = []
@@ -340,6 +401,6 @@ def scrape_cause_list(db: Session, target_date: date = None) -> int:
         SCRAPER_STATE["stop_requested"] = False
 
 
-def run_scraper(db: Session, target_date: date = None) -> int:
+def run_scraper(db: Session, target_date: date | None = None) -> int:
     return scrape_cause_list(db, target_date)
 
