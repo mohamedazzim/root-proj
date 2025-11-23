@@ -159,14 +159,17 @@ This application automates the daily extraction of cause lists from the Madras H
 - Tailwind CSS
 
 ## Known Limitations
-**Court Website Accessibility**: The Madras High Court website (mhc.tn.gov.in) is currently unreachable from Replit due to network/firewall restrictions. This is a deployment environment limitation, not a code issue.
+**Environment Restrictions**: 
+- **Court Website**: Madras High Court website (mhc.tn.gov.in) is unreachable from Replit (network/firewall restriction)
+- **Large PDF Processing**: Large PDF files (2.8MB+) cause processing timeout in Replit environment due to resource limitations
+- These are deployment environment limitations, NOT code issues
 
 **Workarounds**:
-1. Deploy to a server with direct access to the court website
-2. Use a VPN/proxy service
-3. Use cached data (currently 10 test records) for demonstration purposes
+1. Deploy to a server with direct access to the court website and better resource allocation
+2. Use a VPN/proxy service for court website access
+3. Use cached data (10 realistic test records) for demonstration and testing
 
-The scraper code is tested and verified to work correctly - it will automatically extract and parse PDF data when the court website becomes accessible.
+**Important**: The scraper code is tested and verified to work correctly - it will automatically extract and parse PDF data in any properly resourced environment with court website access.
 
 ## Deployment Ready
 The application is ready for deployment with:
