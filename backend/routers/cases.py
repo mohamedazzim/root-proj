@@ -217,84 +217,154 @@ async def download_causes_pdf(
     hearing_date_to: date = None,
     case_type: str = None,
     is_hrce: bool = None,
+    fuzzy: bool = False,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # Reuse search logic (simplified for brevity, ideally refactor into a service function)
-    query_obj = db.query(Cause)
-    
-    if query:
-        search = f"%{query}%"
-        query_obj = query_obj.filter(
-            or_(
-                Cause.case_no.ilike(search),
-                Cause.petitioner.ilike(search),
-                Cause.respondent.ilike(search),
-                Cause.advocate.ilike(search),
-                Cause.court_no.ilike(search)
-            )
+    try:
+        print(f"Generating PDF for user {current_user.username}")
+        query_obj = db.query(Cause)
+        
+        causes = []
+        
+        if fuzzy and (case_no or petitioner or respondent or advocate):
+            all_causes = query_obj.all()
+            results = []
+            
+            for cause in all_causes:
+                score = 0
+                matches = 0
+                
+                if case_no and cause.case_no:
+                    s = calculate_similarity(case_no, cause.case_no)
+                    if s > 0.6:
+                        score += s
+                        matches += 1
+                
+                if petitioner and cause.petitioner:
+                    s = calculate_similarity(petitioner, cause.petitioner)
+                    if s > 0.7:
+                        score += s
+                        matches += 1
+                
+                if respondent and cause.respondent:
+                    s = calculate_similarity(respondent, cause.respondent)
+                    if s > 0.7:
+                        score += s
+                        matches += 1
+                
+                if advocate and cause.advocate:
+                    s = calculate_similarity(advocate, cause.advocate)
+                    if s > 0.7:
+                        score += s
+                        matches += 1
+                
+                if matches > 0 and (score / matches) > 0.7:
+                    results.append(cause)
+            
+            if court_no:
+                filtered_results = []
+                for c in results:
+                    if c.court_no == court_no:
+                        filtered_results.append(c)
+                    elif c.court_no and c.court_no.lower() == f"court no. {court_no}".lower():
+                        filtered_results.append(c)
+                    elif c.court_no and len(court_no) == 1 and court_no.isdigit() and c.court_no.lower() == f"court no. 0{court_no}".lower():
+                        filtered_results.append(c)
+                results = filtered_results
+                
+            if hearing_date_from:
+                results = [c for c in results if c.hearing_date and c.hearing_date >= hearing_date_from]
+            if hearing_date_to:
+                results = [c for c in results if c.hearing_date and c.hearing_date <= hearing_date_to]
+            if case_type:
+                results = [c for c in results if c.case_type == case_type]
+            if is_hrce is not None:
+                results = [c for c in results if c.is_hrce == is_hrce]
+            
+            causes = results
+        else:
+            if query:
+                query_obj = query_obj.filter(
+                    or_(
+                        Cause.case_no.ilike(f"%{query}%"),
+                        Cause.petitioner.ilike(f"%{query}%"),
+                        Cause.respondent.ilike(f"%{query}%"),
+                        Cause.advocate.ilike(f"%{query}%"),
+                        Cause.raw_text.ilike(f"%{query}%")
+                    )
+                )
+            
+            if case_no:
+                query_obj = query_obj.filter(Cause.case_no.ilike(f"%{case_no}%"))
+            if petitioner:
+                query_obj = query_obj.filter(Cause.petitioner.ilike(f"%{petitioner}%"))
+            if respondent:
+                query_obj = query_obj.filter(Cause.respondent.ilike(f"%{respondent}%"))
+            if advocate:
+                query_obj = query_obj.filter(Cause.advocate.ilike(f"%{advocate}%"))
+            if court_no:
+                court_filters = [
+                    Cause.court_no == court_no,
+                    Cause.court_no.ilike(f"COURT NO. {court_no}"),
+                    Cause.court_no.ilike(f"COURT NO. 0{court_no}") if len(court_no) == 1 and court_no.isdigit() else None
+                ]
+                court_filters = [f for f in court_filters if f is not None]
+                query_obj = query_obj.filter(or_(*court_filters))
+                
+            if hearing_date_from:
+                query_obj = query_obj.filter(Cause.hearing_date >= hearing_date_from)
+            if hearing_date_to:
+                query_obj = query_obj.filter(Cause.hearing_date <= hearing_date_to)
+            if case_type:
+                query_obj = query_obj.filter(Cause.case_type.ilike(f"%{case_type}%"))
+            if is_hrce is not None:
+                query_obj = query_obj.filter(Cause.is_hrce == is_hrce)
+                
+            causes = query_obj.all()
+        
+        # Generate PDF
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=landscape(letter))
+        elements = []
+        styles = getSampleStyleSheet()
+        
+        elements.append(Paragraph("Cause List Search Results", styles['Title']))
+        elements.append(Spacer(1, 12))
+        
+        data = [['Court No', 'Case No', 'Petitioner', 'Respondent', 'Advocate', 'Date']]
+        
+        for cause in causes:
+            data.append([
+                cause.court_no or "",
+                cause.case_no or "",
+                (cause.petitioner or "")[:30] + "..." if len(cause.petitioner or "") > 30 else (cause.petitioner or ""),
+                (cause.respondent or "")[:30] + "..." if len(cause.respondent or "") > 30 else (cause.respondent or ""),
+                (cause.advocate or "")[:30] + "..." if len(cause.advocate or "") > 30 else (cause.advocate or ""),
+                str(cause.hearing_date)
+            ])
+            
+        table = Table(data, colWidths=[80, 100, 150, 150, 150, 80])
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            ('FONTSIZE', (0, 0), (-1, -1), 8),
+        ]))
+        
+        elements.append(table)
+        doc.build(elements)
+        
+        buffer.seek(0)
+        return StreamingResponse(
+            buffer,
+            media_type="application/pdf",
+            headers={"Content-Disposition": "attachment; filename=cause_list_results.pdf"}
         )
-    
-    if case_no:
-        query_obj = query_obj.filter(Cause.case_no.ilike(f"%{case_no}%"))
-    if petitioner:
-        query_obj = query_obj.filter(Cause.petitioner.ilike(f"%{petitioner}%"))
-    if respondent:
-        query_obj = query_obj.filter(Cause.respondent.ilike(f"%{respondent}%"))
-    if advocate:
-        query_obj = query_obj.filter(Cause.advocate.ilike(f"%{advocate}%"))
-    if court_no:
-        query_obj = query_obj.filter(Cause.court_no.ilike(f"%{court_no}%"))
-    if hearing_date_from:
-        query_obj = query_obj.filter(Cause.hearing_date >= hearing_date_from)
-    if hearing_date_to:
-        query_obj = query_obj.filter(Cause.hearing_date <= hearing_date_to)
-    if case_type:
-        query_obj = query_obj.filter(Cause.case_type.ilike(f"%{case_type}%"))
-    if is_hrce is not None:
-        query_obj = query_obj.filter(Cause.is_hrce == is_hrce)
-        
-    causes = query_obj.all()
-    
-    # Generate PDF
-    buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=landscape(letter))
-    elements = []
-    styles = getSampleStyleSheet()
-    
-    elements.append(Paragraph("Cause List Search Results", styles['Title']))
-    elements.append(Spacer(1, 12))
-    
-    data = [['Court No', 'Case No', 'Petitioner', 'Respondent', 'Advocate', 'Date']]
-    
-    for cause in causes:
-        data.append([
-            cause.court_no or "",
-            cause.case_no or "",
-            (cause.petitioner or "")[:30] + "..." if len(cause.petitioner or "") > 30 else (cause.petitioner or ""),
-            (cause.respondent or "")[:30] + "..." if len(cause.respondent or "") > 30 else (cause.respondent or ""),
-            (cause.advocate or "")[:30] + "..." if len(cause.advocate or "") > 30 else (cause.advocate or ""),
-            str(cause.hearing_date)
-        ])
-        
-    table = Table(data, colWidths=[80, 100, 150, 150, 150, 80])
-    table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-        ('GRID', (0, 0), (-1, -1), 1, colors.black),
-        ('FONTSIZE', (0, 0), (-1, -1), 8),
-    ]))
-    
-    elements.append(table)
-    doc.build(elements)
-    
-    buffer.seek(0)
-    return StreamingResponse(
-        buffer,
-        media_type="application/pdf",
-        headers={"Content-Disposition": "attachment; filename=cause_list_results.pdf"}
-    )
+    except Exception as e:
+        print(f"Error generating PDF: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate PDF: {str(e)}")
